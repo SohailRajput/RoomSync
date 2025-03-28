@@ -29,7 +29,7 @@ export default function FindRoommates() {
     location: "",
     minAge: 18,
     maxAge: 65,
-    gender: "",
+    gender: "any",
     lifestyle: [] as string[],
     isVerified: false,
   });
@@ -37,7 +37,17 @@ export default function FindRoommates() {
   const [showFilters, setShowFilters] = useState(false);
   
   const { data: roommates, isLoading } = useQuery({
-    queryKey: ["/api/roommates", filters],
+    queryKey: [
+      `/api/roommates?${new URLSearchParams({
+        ...(filters.location ? { location: filters.location } : {}),
+        ...(filters.minAge ? { minAge: filters.minAge.toString() } : {}),
+        ...(filters.maxAge ? { maxAge: filters.maxAge.toString() } : {}),
+        ...(filters.gender && filters.gender !== "any" ? { gender: filters.gender } : {}),
+        ...(filters.lifestyle.length > 0 ? { lifestyle: filters.lifestyle.join(',') } : {}),
+        ...(filters.isVerified ? { isVerified: 'true' } : {})
+      }).toString()}`,
+      filters
+    ],
   });
   
   const handleLifestyleChange = (value: string) => {
@@ -127,7 +137,7 @@ export default function FindRoommates() {
                         <SelectValue placeholder="Any Gender" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Any Gender</SelectItem>
+                        <SelectItem value="any">Any Gender</SelectItem>
                         <SelectItem value="male">Male</SelectItem>
                         <SelectItem value="female">Female</SelectItem>
                         <SelectItem value="non-binary">Non-binary</SelectItem>
@@ -176,8 +186,8 @@ export default function FindRoommates() {
               Array(6).fill(0).map((_, i) => (
                 <div key={i} className="bg-white h-80 rounded-lg animate-pulse" />
               ))
-            ) : roommates?.length ? (
-              (roommates as Roommate[]).map((roommate) => (
+            ) : roommates && Array.isArray(roommates) && roommates.length > 0 ? (
+              roommates.map((roommate) => (
                 <RoommateCard 
                   key={roommate.id} 
                   roommate={roommate} 
