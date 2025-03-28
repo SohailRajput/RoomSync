@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import Navbar from "@/components/layout/navbar";
 import Footer from "@/components/layout/footer";
@@ -15,7 +15,10 @@ import { useToast } from "@/hooks/use-toast";
 export default function Messages() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [selectedConversation, setSelectedConversation] = useState<number | null>(null);
+  const params = useParams();
+  const [selectedConversation, setSelectedConversation] = useState<number | null>(
+    params.id ? parseInt(params.id) : null
+  );
   const [newMessage, setNewMessage] = useState("");
   
   const { 

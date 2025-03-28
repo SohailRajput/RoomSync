@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useRoute, Link } from "wouter";
+import { Link, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import Navbar from "@/components/layout/navbar";
 import Footer from "@/components/layout/footer";
@@ -21,8 +21,8 @@ import type { Roommate } from "@shared/schema";
 
 export default function RoommateProfile() {
   const { user } = useAuth();
-  const [, params] = useRoute<{ id: string }>('/roommate/:id');
-  const roommateId = params?.id ? parseInt(params.id, 10) : undefined;
+  const params = useParams();
+  const roommateId = params.id ? parseInt(params.id, 10) : 0;
   
   const { data: roommate, isLoading } = useQuery<Roommate>({
     queryKey: [`/api/roommates/${roommateId}`],
