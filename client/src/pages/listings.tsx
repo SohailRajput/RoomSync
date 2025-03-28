@@ -30,7 +30,7 @@ export default function Listings() {
     location: "",
     minPrice: 500,
     maxPrice: 3000,
-    roomType: "",
+    roomType: "any",
     amenities: [] as string[],
     availableNow: false,
   });
@@ -38,7 +38,17 @@ export default function Listings() {
   const [showFilters, setShowFilters] = useState(false);
   
   const { data: listings, isLoading } = useQuery({
-    queryKey: ["/api/listings", filters],
+    queryKey: [
+      `/api/listings?${new URLSearchParams({
+        ...(filters.location ? { location: filters.location } : {}),
+        ...(filters.minPrice ? { minPrice: filters.minPrice.toString() } : {}),
+        ...(filters.maxPrice ? { maxPrice: filters.maxPrice.toString() } : {}),
+        ...(filters.roomType && filters.roomType !== "any" ? { roomType: filters.roomType } : {}),
+        ...(filters.amenities.length > 0 ? { amenities: filters.amenities.join(',') } : {}),
+        ...(filters.availableNow ? { availableNow: 'true' } : {})
+      }).toString()}`,
+      filters
+    ],
   });
   
   const handleAmenityChange = (value: string) => {
@@ -142,7 +152,7 @@ export default function Listings() {
                         <SelectValue placeholder="Any Room Type" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Any Room Type</SelectItem>
+                        <SelectItem value="any">Any Room Type</SelectItem>
                         {roomTypeOptions.map(type => (
                           <SelectItem key={type} value={type.toLowerCase()}>{type}</SelectItem>
                         ))}
@@ -190,8 +200,8 @@ export default function Listings() {
               Array(6).fill(0).map((_, i) => (
                 <div key={i} className="bg-white h-80 rounded-lg animate-pulse" />
               ))
-            ) : listings?.length ? (
-              (listings as Listing[]).map((listing) => (
+            ) : listings && Array.isArray(listings) && listings.length > 0 ? (
+              listings.map((listing) => (
                 <ListingCard key={listing.id} listing={listing} />
               ))
             ) : (
