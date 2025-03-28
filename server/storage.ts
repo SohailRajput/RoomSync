@@ -311,8 +311,12 @@ export class MemStorage implements IStorage {
       id,
       userId,
       ...listing,
-      isFeatured: false,
-      rating: 45, // Default rating (stored as integer, represents 4.5)
+      // Ensure arrays are initialized even if not provided
+      amenities: Array.isArray(listing.amenities) ? listing.amenities : [],
+      images: Array.isArray(listing.images) ? listing.images : [],
+      // Set default values for other fields
+      isFeatured: listing.isFeatured ?? false,
+      rating: listing.rating ?? 0,
       createdAt: new Date()
     };
     
@@ -875,8 +879,13 @@ export class DatabaseStorage implements IStorage {
     const result = await this.db.insert(listings).values({
       userId,
       ...listing,
+      // Ensure arrays are properly handled
+      amenities: Array.isArray(listing.amenities) ? listing.amenities : [],
+      images: Array.isArray(listing.images) ? listing.images : [],
+      // Set default values
+      roommates: listing.roommates ?? 0,
       isFeatured: false,
-      rating: 45, // Default rating (stored as integer, represents 4.5)
+      rating: 0, // Start with a neutral rating until reviewed
     }).returning();
     
     const user = await this.getUser(userId);

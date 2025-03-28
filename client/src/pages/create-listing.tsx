@@ -1,7 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import Navbar from "@/components/layout/navbar";
 import Footer from "@/components/layout/footer";
@@ -31,6 +31,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth.tsx";
@@ -320,12 +321,13 @@ export default function CreateListing() {
                                   >
                                     <FormControl>
                                       <Checkbox
-                                        checked={field.value?.includes(option)}
+                                        checked={Array.isArray(field.value) && field.value.includes(option)}
                                         onCheckedChange={(checked) => {
+                                          const currentValue = Array.isArray(field.value) ? field.value : [];
                                           return checked
-                                            ? field.onChange([...field.value, option])
+                                            ? field.onChange([...currentValue, option])
                                             : field.onChange(
-                                                field.value?.filter(
+                                                currentValue.filter(
                                                   (value) => value !== option
                                                 )
                                               )
@@ -351,9 +353,27 @@ export default function CreateListing() {
                     name="images"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Images (Coming Soon)</FormLabel>
-                        <FormDescription>
-                          Image upload functionality will be available soon. For now, we'll use placeholder images.
+                        <FormLabel>Images</FormLabel>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
+                          <div className="border border-dashed border-neutral-300 rounded-md p-4 h-40 flex flex-col items-center justify-center bg-neutral-50 text-neutral-500">
+                            <div className="mb-2 text-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto mb-2 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <p className="text-sm">Image upload coming soon</p>
+                            </div>
+                          </div>
+                          <div className="border border-dashed border-neutral-300 rounded-md p-4 h-40 flex flex-col items-center justify-center bg-neutral-50 text-neutral-500">
+                            <div className="mb-2 text-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mx-auto mb-2 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <p className="text-sm">Image upload coming soon</p>
+                            </div>
+                          </div>
+                        </div>
+                        <FormDescription className="mt-2">
+                          Listings with photos get 2x more interest. Image upload functionality will be available soon. For now, placeholder images will be used.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

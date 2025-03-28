@@ -326,13 +326,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/listings', requireAuth, async (req, res) => {
     try {
       const data = insertListingSchema.parse(req.body);
-      const listing = await storage.createListing(req.session.userId!, data);
+      // Add defaults for isFeatured and rating to match the required type
+      const listingData = {
+        ...data,
+        // Ensure arrays are properly initialized
+        amenities: Array.isArray(data.amenities) ? data.amenities : [],
+        images: Array.isArray(data.images) ? data.images : [],
+        // Set roommates to 0 if not provided
+        roommates: data.roommates ?? 0,
+        // Set default fields
+        isFeatured: false,
+        rating: 0
+      };
+      const listing = await storage.createListing(req.session.userId!, listingData);
       res.status(201).json(listing);
     } catch (error) {
       if (error instanceof z.ZodError) {
         const validationError = fromZodError(error);
         res.status(400).json({ message: validationError.message });
       } else {
+        console.error('Error creating listing:', error);
         res.status(500).json({ message: 'An error occurred creating listing' });
       }
     }
@@ -366,7 +379,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertMessageSchema.parse({
         ...req.body,
-        senderId: req.session.userId!
+        senderId: req.session.userId!,
+        // Ensure read is properly set (false for new messages by default)
+        read: req.body.read ?? false
       });
       
       const message = await storage.createMessage(data);
