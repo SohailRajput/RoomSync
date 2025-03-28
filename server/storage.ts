@@ -186,24 +186,65 @@ export class MemStorage implements IStorage {
     // Exclude the current user
     const otherRoommates = roommates.filter(r => r.id !== userId);
     
-    // Calculate compatibility scores (simplified version)
+    // Calculate compatibility scores with detailed breakdown
     return otherRoommates.map(roommate => {
+      // Lifestyle compatibility (based on preferences)
       const commonPreferences = user.preferences?.filter(
         pref => roommate.preferences?.includes(pref)
-      ).length || 0;
+      ) || [];
       
       const totalPreferences = new Set([
         ...(user.preferences || []),
         ...(roommate.preferences || [])
       ]).size;
       
-      const score = totalPreferences > 0 
-        ? Math.round((commonPreferences / totalPreferences) * 100) 
-        : 50; // Default score
+      const lifestyleScore = totalPreferences > 0 
+        ? Math.round((commonPreferences.length / totalPreferences) * 100) 
+        : 50;
+      
+      // Location compatibility
+      const locationScore = user.location && roommate.location && 
+        user.location.toLowerCase() === roommate.location.toLowerCase() 
+        ? 100 
+        : user.location && roommate.location && 
+          (user.location.toLowerCase().includes(roommate.location.toLowerCase()) || 
+           roommate.location.toLowerCase().includes(user.location.toLowerCase()))
+          ? 75
+          : 50;
+      
+      // Schedule compatibility (simple algorithm based on lifestyle tags)
+      const userSchedulePrefs = (user.preferences || []).filter(p => 
+        ['Early bird', 'Night owl'].includes(p)
+      );
+      
+      const roommateSchedulePrefs = (roommate.preferences || []).filter(p => 
+        ['Early bird', 'Night owl'].includes(p)
+      );
+      
+      const scheduleScore = userSchedulePrefs.length > 0 && roommateSchedulePrefs.length > 0
+        ? userSchedulePrefs.some(p => roommateSchedulePrefs.includes(p)) ? 100 : 30
+        : 70; // Neutral if one or both don't specify
+      
+      // Overall score is weighted average
+      const overallScore = Math.round(
+        (lifestyleScore * 0.5) + 
+        (locationScore * 0.3) + 
+        (scheduleScore * 0.2)
+      );
+      
+      // Create detailed compatibility breakdown
+      const compatibilityDetails = {
+        lifestyleScore,
+        locationScore,
+        scheduleScore,
+        overallScore,
+        commonInterests: commonPreferences
+      };
       
       return {
         ...roommate,
-        compatibilityScore: score
+        compatibilityScore: overallScore,
+        compatibilityDetails
       };
     })
     .sort((a, b) => (b.compatibilityScore || 0) - (a.compatibilityScore || 0))
@@ -658,24 +699,65 @@ export class DatabaseStorage implements IStorage {
     // Exclude the current user
     const otherRoommates = roommates.filter(r => r.id !== userId);
     
-    // Calculate compatibility scores
+    // Calculate compatibility scores with detailed breakdown
     return otherRoommates.map(roommate => {
+      // Lifestyle compatibility (based on preferences)
       const commonPreferences = user.preferences?.filter(
         pref => roommate.preferences?.includes(pref)
-      ).length || 0;
+      ) || [];
       
       const totalPreferences = new Set([
         ...(user.preferences || []),
         ...(roommate.preferences || [])
       ]).size;
       
-      const score = totalPreferences > 0 
-        ? Math.round((commonPreferences / totalPreferences) * 100) 
-        : 50; // Default score
+      const lifestyleScore = totalPreferences > 0 
+        ? Math.round((commonPreferences.length / totalPreferences) * 100) 
+        : 50;
+      
+      // Location compatibility
+      const locationScore = user.location && roommate.location && 
+        user.location.toLowerCase() === roommate.location.toLowerCase() 
+        ? 100 
+        : user.location && roommate.location && 
+          (user.location.toLowerCase().includes(roommate.location.toLowerCase()) || 
+           roommate.location.toLowerCase().includes(user.location.toLowerCase()))
+          ? 75
+          : 50;
+      
+      // Schedule compatibility (simple algorithm based on lifestyle tags)
+      const userSchedulePrefs = (user.preferences || []).filter(p => 
+        ['Early bird', 'Night owl'].includes(p)
+      );
+      
+      const roommateSchedulePrefs = (roommate.preferences || []).filter(p => 
+        ['Early bird', 'Night owl'].includes(p)
+      );
+      
+      const scheduleScore = userSchedulePrefs.length > 0 && roommateSchedulePrefs.length > 0
+        ? userSchedulePrefs.some(p => roommateSchedulePrefs.includes(p)) ? 100 : 30
+        : 70; // Neutral if one or both don't specify
+      
+      // Overall score is weighted average
+      const overallScore = Math.round(
+        (lifestyleScore * 0.5) + 
+        (locationScore * 0.3) + 
+        (scheduleScore * 0.2)
+      );
+      
+      // Create detailed compatibility breakdown
+      const compatibilityDetails = {
+        lifestyleScore,
+        locationScore,
+        scheduleScore,
+        overallScore,
+        commonInterests: commonPreferences
+      };
       
       return {
         ...roommate,
-        compatibilityScore: score
+        compatibilityScore: overallScore,
+        compatibilityDetails
       };
     })
     .sort((a, b) => (b.compatibilityScore || 0) - (a.compatibilityScore || 0))

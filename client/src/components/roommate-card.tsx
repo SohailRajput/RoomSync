@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MapPin } from "lucide-react";
 import { type Roommate } from "@shared/schema";
+import CompatibilityScore from "./compatibility-score";
 
 interface RoommateCardProps {
   roommate: Roommate;
@@ -19,7 +20,10 @@ export default function RoommateCard({
       <div className="flex-shrink-0 relative">
         {compatibilityScore && (
           <div className="absolute top-2 right-2">
-            <Badge variant="match">{compatibilityScore}% Match</Badge>
+            <CompatibilityScore 
+              score={compatibilityScore} 
+              details={roommate.compatibilityDetails}
+            />
           </div>
         )}
         <img 
@@ -56,7 +60,7 @@ export default function RoommateCard({
         <div className="mt-6">
           <div className="flex space-x-2">
             <Button asChild>
-              <Link href={`/profile/${roommate.id}`}>View Profile</Link>
+              <Link href={`/roommate/${roommate.id}`}>View Profile</Link>
             </Button>
             <Button variant="outline" asChild>
               <Link href={`/messages/${roommate.id}`}>Message</Link>

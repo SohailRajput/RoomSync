@@ -107,6 +107,14 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UpdateUserProfile = z.infer<typeof updateUserProfileSchema>;
 
+export type CompatibilityDetails = {
+  lifestyleScore: number;
+  locationScore: number;
+  scheduleScore: number;
+  overallScore: number;
+  commonInterests: string[];
+};
+
 export type Roommate = User & {
   id: number;
   budget?: number;
@@ -114,6 +122,7 @@ export type Roommate = User & {
   duration?: string;
   isLookingForRoom: boolean;
   compatibilityScore?: number;
+  compatibilityDetails?: CompatibilityDetails;
   preferences: string[];
 };
 

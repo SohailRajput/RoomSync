@@ -198,6 +198,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Get compatibility details between logged-in user and specific roommate
+  app.get('/api/roommates/compatibility/:id', requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const roommateId = parseInt(req.params.id);
+      
+      if (isNaN(roommateId)) {
+        return res.status(400).json({ message: 'Invalid roommate ID' });
+      }
+      
+      if (userId === roommateId) {
+        return res.status(400).json({ message: 'Cannot calculate compatibility with yourself' });
+      }
+      
+      const user = await storage.getUser(userId);
+      const roommate = await storage.getUser(roommateId);
+      
+      if (!user || !roommate) {
+        return res.status(404).json({ message: 'User or roommate not found' });
+      }
+      
+      // Calculate compatibility scores with detailed breakdown
+      const topMatches = await storage.getTopMatches(userId);
+      const matchDetails = topMatches.find(r => r.id === roommateId);
+      
+      if (!matchDetails) {
+        return res.status(404).json({ message: 'Compatibility details not available' });
+      }
+      
+      // Return only compatibility-related information
+      res.json({
+        id: roommateId,
+        compatibilityScore: matchDetails.compatibilityScore,
+        compatibilityDetails: matchDetails.compatibilityDetails
+      });
+    } catch (error) {
+      res.status(500).json({ message: 'Error calculating compatibility' });
+    }
+  });
+  
+  // Get specific roommate by ID
+  app.get('/api/roommates/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ message: 'Invalid roommate ID' });
+      }
+      
+      const user = await storage.getUser(id);
+      if (!user) {
+        return res.status(404).json({ message: 'Roommate not found' });
+      }
+      
+      const roommates = await storage.getRoommates({ /* no filters */ });
+      const roommate = roommates.find(r => r.id === id);
+      
+      if (!roommate) {
+        return res.status(404).json({ message: 'Roommate not found' });
+      }
+      
+      // Don't expose sensitive information like password
+      const { password, ...roommateWithoutPassword } = roommate;
+      
+      res.json(roommateWithoutPassword);
+    } catch (error) {
+      res.status(500).json({ message: 'Error fetching roommate profile' });
+    }
+  });
+  
   // Listing routes
   app.get('/api/listings', async (req, res) => {
     try {

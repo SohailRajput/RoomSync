@@ -10,6 +10,7 @@ import FindRoommates from "@/pages/find-roommates";
 import Listings from "@/pages/listings";
 import Messages from "@/pages/messages";
 import Profile from "@/pages/profile";
+import RoommateProfile from "@/pages/roommate-profile";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
 import CreateListing from "@/pages/create-listing";
@@ -22,7 +23,9 @@ function Router() {
       <Route path="/find-roommates" component={FindRoommates} />
       <Route path="/listings" component={Listings} />
       <Route path="/messages" component={Messages} />
+      <Route path="/messages/:id" component={Messages} />
       <Route path="/profile" component={Profile} />
+      <Route path="/roommate/:id" component={RoommateProfile} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/create-listing" component={CreateListing} />
