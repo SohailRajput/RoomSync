@@ -8,23 +8,34 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth.tsx";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Send } from "lucide-react";
-import { type Message } from "@shared/schema";
+import { Send, AlertTriangle } from "lucide-react";
+import { type Message, type Conversation } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Messages() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [selectedConversation, setSelectedConversation] = useState<number | null>(null);
   const [newMessage, setNewMessage] = useState("");
   
-  const { data: conversations, isLoading: conversationsLoading } = useQuery({
+  const { 
+    data: conversations = [], 
+    isLoading: conversationsLoading,
+    error: conversationsError
+  } = useQuery<Conversation[]>({
     queryKey: ["/api/messages/conversations"],
+    refetchInterval: 5000, // Poll for new conversations every 5 seconds
   });
   
-  const { data: messages, isLoading: messagesLoading } = useQuery({
+  const { 
+    data: messages = [], 
+    isLoading: messagesLoading,
+    error: messagesError
+  } = useQuery<Message[]>({
     queryKey: ["/api/messages/conversation", selectedConversation],
     enabled: selectedConversation !== null,
+    refetchInterval: 3000, // Poll for new messages every 3 seconds
   });
-  
   const sendMessage = async () => {
     if (!newMessage.trim() || !selectedConversation) return;
     
@@ -35,12 +46,23 @@ export default function Messages() {
       });
       
       setNewMessage("");
-      // Refetch the conversation messages
-      await queryClient.invalidateQueries({
-        queryKey: ["/api/messages/conversation", selectedConversation]
-      });
+      
+      // Refetch both messages and conversations
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["/api/messages/conversation", selectedConversation]
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["/api/messages/conversations"]
+        })
+      ]);
     } catch (error) {
       console.error("Failed to send message:", error);
+      toast({
+        title: "Error sending message",
+        description: "There was a problem sending your message. Please try again.",
+        variant: "destructive"
+      });
     }
   };
   
@@ -78,6 +100,22 @@ export default function Messages() {
                 
                 {conversationsLoading ? (
                   <div className="p-4">Loading conversations...</div>
+                ) : conversationsError ? (
+                  <div className="p-4 text-center">
+                    <AlertTriangle className="h-6 w-6 text-red-500 mx-auto mb-2" />
+                    <p className="text-red-500 font-medium mb-2">Error loading conversations</p>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        queryClient.invalidateQueries({
+                          queryKey: ["/api/messages/conversations"]
+                        });
+                      }}
+                    >
+                      Retry
+                    </Button>
+                  </div>
                 ) : conversations?.length ? (
                   <div>
                     {conversations.map((conversation) => (
@@ -143,6 +181,23 @@ export default function Messages() {
                     <div className="flex-1 overflow-y-auto p-4 space-y-4">
                       {messagesLoading ? (
                         <div className="text-center">Loading messages...</div>
+                      ) : messagesError ? (
+                        <div className="text-center p-4">
+                          <AlertTriangle className="h-6 w-6 text-red-500 mx-auto mb-2" />
+                          <p className="text-red-500">Error loading messages</p>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="mt-2"
+                            onClick={() => {
+                              queryClient.invalidateQueries({
+                                queryKey: ["/api/messages/conversation", selectedConversation]
+                              });
+                            }}
+                          >
+                            Try Again
+                          </Button>
+                        </div>
                       ) : messages?.length ? (
                         messages.map((message: Message) => (
                           <div 
@@ -160,7 +215,7 @@ export default function Messages() {
                               <p className={`text-xs ${
                                 message.senderId === user.id ? 'text-primary-foreground/70' : 'text-neutral-400'
                               } text-right mt-1`}>
-                                {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                {message.timestamp ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                               </p>
                             </div>
                           </div>

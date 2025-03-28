@@ -931,108 +931,137 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getConversations(userId: number): Promise<Conversation[]> {
-    // Find all unique users this user has communicated with
-    const query = sql`
-      WITH conversation_partners AS (
-        SELECT DISTINCT
-          CASE 
-            WHEN sender_id = ${userId} THEN receiver_id
-            ELSE sender_id
-          END AS partner_id
-        FROM ${messages}
-        WHERE sender_id = ${userId} OR receiver_id = ${userId}
-      )
-      SELECT 
-        cp.partner_id as user_id,
-        u.first_name,
-        u.last_name,
-        u.username,
-        u.profile_image,
-        (
-          SELECT content 
-          FROM ${messages} m
-          WHERE (m.sender_id = ${userId} AND m.receiver_id = cp.partner_id)
-             OR (m.sender_id = cp.partner_id AND m.receiver_id = ${userId})
-          ORDER BY m.timestamp DESC
-          LIMIT 1
-        ) as last_message,
-        (
-          SELECT timestamp
-          FROM ${messages} m
-          WHERE (m.sender_id = ${userId} AND m.receiver_id = cp.partner_id)
-             OR (m.sender_id = cp.partner_id AND m.receiver_id = ${userId})
-          ORDER BY m.timestamp DESC
-          LIMIT 1
-        ) as last_message_time,
-        (
-          SELECT CASE
-                  WHEN m.sender_id = ${userId} THEN true
-                  ELSE m.read
-                END
-          FROM ${messages} m
-          WHERE (m.sender_id = ${userId} AND m.receiver_id = cp.partner_id)
-             OR (m.sender_id = cp.partner_id AND m.receiver_id = ${userId})
-          ORDER BY m.timestamp DESC
-          LIMIT 1
-        ) as read
-      FROM conversation_partners cp
-      JOIN ${users} u ON cp.partner_id = u.id
-      ORDER BY last_message_time DESC
-    `;
-    
-    const result = await this.db.execute(query);
-    
-    return result.map(row => ({
-      userId: Number(row.user_id),
-      name: `${row.first_name || ''} ${row.last_name || ''}`.trim() || row.username,
-      profileImage: row.profile_image,
-      lastMessage: row.last_message,
-      lastMessageTime: new Date(row.last_message_time),
-      read: Boolean(row.read)
-    })) as Conversation[];
+    try {
+      // Find all messages for this user
+      const userMessages = await this.db.select()
+        .from(messages)
+        .where(
+          or(
+            eq(messages.senderId, userId),
+            eq(messages.receiverId, userId)
+          )
+        );
+      
+      // Find unique conversation partners
+      const partners = new Set<number>();
+      userMessages.forEach(msg => {
+        if (msg.senderId === userId) {
+          partners.add(msg.receiverId);
+        } else {
+          partners.add(msg.senderId);
+        }
+      });
+      
+      // Build conversation objects
+      const conversations: Conversation[] = [];
+      
+      for (const partnerId of partners) {
+        // Get partner info
+        const partner = await this.getUser(partnerId);
+        if (!partner) continue;
+        
+        // Get the latest message for this conversation
+        const conversationMessages = userMessages.filter(msg => 
+          (msg.senderId === userId && msg.receiverId === partnerId) ||
+          (msg.senderId === partnerId && msg.receiverId === userId)
+        ).sort((a, b) => {
+          // Sort by timestamp descending
+          const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : 0;
+          const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : 0;
+          return timeB - timeA;
+        });
+        
+        if (conversationMessages.length > 0) {
+          const latestMessage = conversationMessages[0];
+          
+          conversations.push({
+            userId: partnerId,
+            name: `${partner.firstName || ''} ${partner.lastName || ''}`.trim() || partner.username,
+            profileImage: partner.profileImage || undefined,
+            lastMessage: latestMessage.content,
+            lastMessageTime: latestMessage.timestamp instanceof Date ? latestMessage.timestamp : new Date(),
+            read: latestMessage.senderId === userId || !!latestMessage.read
+          });
+        }
+      }
+      
+      // Sort by most recent message
+      return conversations.sort((a, b) => 
+        b.lastMessageTime.getTime() - a.lastMessageTime.getTime()
+      );
+    } catch (error) {
+      console.error("Error getting conversations:", error);
+      return [];
+    }
   }
 
   async createMessage(message: Omit<Message, "id" | "timestamp">): Promise<Message> {
-    const result = await this.db.insert(messages).values({
-      ...message,
-    }).returning();
-    
-    const newMessage = result[0];
-    
-    // Also update or create conversation record 
-    const conversationKey = this.getConversationKey(message.senderId, message.receiverId);
-    const existingConversation = await this.db.select()
-      .from(conversations)
-      .where(
-        and(
-          eq(conversations.user1Id, Number(conversationKey.split('-')[0])),
-          eq(conversations.user2Id, Number(conversationKey.split('-')[1]))
-        )
-      )
-      .limit(1);
-    
-    if (existingConversation.length) {
-      await this.db.update(conversations)
-        .set({ 
-          lastMessageId: newMessage.id,
-          updatedAt: new Date()
-        })
-        .where(eq(conversations.id, existingConversation[0].id));
-    } else {
-      await this.db.insert(conversations).values({
-        user1Id: Number(conversationKey.split('-')[0]),
-        user2Id: Number(conversationKey.split('-')[1]),
-        lastMessageId: newMessage.id
-      });
+    try {
+      // Ensure read is properly set
+      const messageData = {
+        ...message,
+        read: message.read === undefined ? false : message.read
+      };
+      
+      const result = await this.db.insert(messages).values(messageData).returning();
+      
+      if (!result || result.length === 0) {
+        throw new Error("Failed to create message");
+      }
+      
+      const newMessage = result[0];
+      
+      // Try to update or create conversation record if needed
+      try {
+        const conversationKey = this.getConversationKey(message.senderId, message.receiverId);
+        const [user1Id, user2Id] = conversationKey.split('-').map(Number);
+        
+        const existingConversation = await this.db.select()
+          .from(conversations)
+          .where(
+            or(
+              and(
+                eq(conversations.user1Id, user1Id),
+                eq(conversations.user2Id, user2Id)
+              ),
+              and(
+                eq(conversations.user1Id, user2Id),
+                eq(conversations.user2Id, user1Id)
+              )
+            )
+          )
+          .limit(1);
+        
+        if (existingConversation.length) {
+          await this.db.update(conversations)
+            .set({ 
+              lastMessageId: newMessage.id,
+              updatedAt: new Date()
+            })
+            .where(eq(conversations.id, existingConversation[0].id));
+        } else {
+          await this.db.insert(conversations).values({
+            user1Id,
+            user2Id,
+            lastMessageId: newMessage.id
+          });
+        }
+      } catch (convError) {
+        console.error("Error updating conversation:", convError);
+        // Continue even if conversation update fails
+      }
+      
+      // Get sender info
+      const sender = await this.getUser(message.senderId);
+      
+      return {
+        ...newMessage,
+        senderName: sender ? `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || sender.username : undefined
+      };
+    } catch (error) {
+      console.error("Error creating message:", error);
+      throw error;
     }
-    
-    // Get sender info
-    const sender = await this.getUser(message.senderId);
-    
-    return {
-      ...newMessage,
-      senderName: sender ? `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || sender.username : undefined
-    };
   }
 
   private getConversationKey(user1Id: number, user2Id: number): string {
