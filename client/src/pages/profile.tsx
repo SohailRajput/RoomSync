@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -69,7 +70,7 @@ export default function Profile() {
   });
   
   // Update form when profile loads
-  React.useEffect(() => {
+  useEffect(() => {
     if (profile) {
       form.reset({
         firstName: profile.firstName || "",
