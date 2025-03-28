@@ -271,7 +271,7 @@ export class MemStorage implements IStorage {
       userId,
       ...listing,
       isFeatured: false,
-      rating: 4.5, // Default rating
+      rating: 45, // Default rating (stored as integer, represents 4.5)
       createdAt: new Date()
     };
     
@@ -462,7 +462,7 @@ export class MemStorage implements IStorage {
       amenities: ["Furnished", "Utilities Included", "WiFi"],
       images: ["https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"],
       isFeatured: true,
-      rating: 4.8,
+      rating: 48, // Represents 4.8 as integer
       createdAt: new Date()
     };
     
@@ -479,7 +479,7 @@ export class MemStorage implements IStorage {
       amenities: ["Partially Furnished", "Laundry", "Balcony"],
       images: ["https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"],
       isFeatured: true,
-      rating: 4.6,
+      rating: 46, // Represents 4.6 as integer
       createdAt: new Date()
     };
     
@@ -496,7 +496,7 @@ export class MemStorage implements IStorage {
       amenities: ["Furnished", "Garden Access", "Pets Allowed"],
       images: ["https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"],
       isFeatured: true,
-      rating: 4.9,
+      rating: 49, // Represents 4.9 as integer
       createdAt: new Date()
     };
     
@@ -794,7 +794,7 @@ export class DatabaseStorage implements IStorage {
       userId,
       ...listing,
       isFeatured: false,
-      rating: 4.5, // Default rating
+      rating: 45, // Default rating (stored as integer, represents 4.5)
     }).returning();
     
     const user = await this.getUser(userId);
