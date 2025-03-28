@@ -1,5 +1,23 @@
-import { users, type User, type InsertUser, type UpdateUserProfile, type Roommate, type Listing, type Message, type Conversation } from "@shared/schema";
+import { 
+  users, 
+  listings,
+  messages,
+  roommates,
+  conversations,
+  type User, 
+  type InsertUser, 
+  type UpdateUserProfile, 
+  type Roommate, 
+  type Listing, 
+  type Message, 
+  type Conversation 
+} from "@shared/schema";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { eq, and, gte, lte, like, inArray, desc, sql, asc, isNotNull, or } from "drizzle-orm";
+import postgres from "postgres";
 import * as crypto from "crypto";
+import { Pool } from "pg";
+import { db as dbInstance } from "./db";
 
 // Storage interface
 export interface IStorage {
@@ -526,4 +544,422 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class DatabaseStorage implements IStorage {
+  private db = dbInstance;
+
+  constructor() {
+    if (!process.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL environment variable is required");
+    }
+  }
+
+  // Helper methods
+  private hashPassword(password: string): string {
+    return crypto.createHash('sha256').update(password).digest('hex');
+  }
+
+  // User methods
+  async getUser(id: number): Promise<User | undefined> {
+    const result = await this.db.select().from(users).where(eq(users.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const result = await this.db.select().from(users).where(eq(users.username, username)).limit(1);
+    return result[0];
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const hashedPassword = this.hashPassword(insertUser.password);
+    
+    const result = await this.db.insert(users).values({
+      username: insertUser.username,
+      password: hashedPassword,
+      preferences: [],
+      isVerified: false
+    }).returning();
+    
+    return result[0];
+  }
+
+  async updateUserProfile(id: number, profile: UpdateUserProfile): Promise<User> {
+    const result = await this.db.update(users)
+      .set(profile)
+      .where(eq(users.id, id))
+      .returning();
+    
+    if (!result.length) {
+      throw new Error("User not found");
+    }
+    
+    return result[0];
+  }
+
+  // Roommate methods
+  async getRoommates(filters?: RoommateFilters): Promise<Roommate[]> {
+    let query = this.db
+      .select({
+        ...users,
+        ...roommates,
+      })
+      .from(users)
+      .innerJoin(roommates, eq(users.id, roommates.userId));
+    
+    // Apply filters
+    if (filters) {
+      const conditions = [];
+      
+      if (filters.location) {
+        conditions.push(like(users.location, `%${filters.location}%`));
+      }
+      
+      if (filters.minAge !== undefined) {
+        conditions.push(gte(users.age, filters.minAge));
+      }
+      
+      if (filters.maxAge !== undefined) {
+        conditions.push(lte(users.age, filters.maxAge));
+      }
+      
+      if (filters.gender) {
+        conditions.push(eq(users.gender, filters.gender));
+      }
+      
+      if (filters.isVerified) {
+        conditions.push(eq(users.isVerified, true));
+      }
+      
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions));
+      }
+    }
+    
+    const results = await query;
+    
+    // Post-process for lifestyle preferences if needed
+    let filteredResults = results;
+    if (filters?.lifestyle && filters.lifestyle.length > 0) {
+      filteredResults = results.filter(r => {
+        return r.preferences && filters.lifestyle!.some(pref => 
+          r.preferences.includes(pref)
+        );
+      });
+    }
+    
+    return filteredResults as unknown as Roommate[];
+  }
+
+  async getTopMatches(userId: number): Promise<Roommate[]> {
+    const user = await this.getUser(userId);
+    if (!user) return [];
+    
+    const roommates = await this.getRoommates();
+    
+    // Exclude the current user
+    const otherRoommates = roommates.filter(r => r.id !== userId);
+    
+    // Calculate compatibility scores
+    return otherRoommates.map(roommate => {
+      const commonPreferences = user.preferences?.filter(
+        pref => roommate.preferences?.includes(pref)
+      ).length || 0;
+      
+      const totalPreferences = new Set([
+        ...(user.preferences || []),
+        ...(roommate.preferences || [])
+      ]).size;
+      
+      const score = totalPreferences > 0 
+        ? Math.round((commonPreferences / totalPreferences) * 100) 
+        : 50; // Default score
+      
+      return {
+        ...roommate,
+        compatibilityScore: score
+      };
+    })
+    .sort((a, b) => (b.compatibilityScore || 0) - (a.compatibilityScore || 0))
+    .slice(0, 6); // Return top 6 matches
+  }
+
+  // Listing methods
+  async getListings(filters?: ListingFilters): Promise<Listing[]> {
+    let query = this.db.select().from(listings);
+    
+    // Apply filters
+    if (filters) {
+      const conditions = [];
+      
+      if (filters.location) {
+        conditions.push(like(listings.location, `%${filters.location}%`));
+      }
+      
+      if (filters.minPrice !== undefined) {
+        conditions.push(gte(listings.price, filters.minPrice));
+      }
+      
+      if (filters.maxPrice !== undefined) {
+        conditions.push(lte(listings.price, filters.maxPrice));
+      }
+      
+      if (filters.roomType) {
+        conditions.push(eq(listings.roomType, filters.roomType));
+      }
+      
+      if (filters.availableNow) {
+        const today = new Date().toISOString().split('T')[0];
+        conditions.push(lte(listings.availableFrom, today));
+      }
+      
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions));
+      }
+    }
+    
+    const results = await query;
+    
+    // Post-process for amenities if needed
+    let filteredResults = results;
+    if (filters?.amenities && filters.amenities.length > 0) {
+      filteredResults = results.filter(l => {
+        return l.amenities && filters.amenities!.some(amenity => 
+          l.amenities.includes(amenity)
+        );
+      });
+    }
+    
+    // Enhance with username info
+    const enhancedResults = await Promise.all(
+      filteredResults.map(async (listing) => {
+        const user = await this.getUser(listing.userId);
+        return {
+          ...listing,
+          userName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username : undefined
+        };
+      })
+    );
+    
+    return enhancedResults;
+  }
+
+  async getListingById(id: number): Promise<Listing | undefined> {
+    const result = await this.db.select().from(listings).where(eq(listings.id, id)).limit(1);
+    if (!result.length) return undefined;
+    
+    const listing = result[0];
+    const user = await this.getUser(listing.userId);
+    
+    return {
+      ...listing,
+      userName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username : undefined
+    };
+  }
+
+  async getFeaturedListings(): Promise<Listing[]> {
+    const result = await this.db.select()
+      .from(listings)
+      .where(eq(listings.isFeatured, true))
+      .limit(3);
+    
+    // Enhance with username info
+    const enhancedResults = await Promise.all(
+      result.map(async (listing) => {
+        const user = await this.getUser(listing.userId);
+        return {
+          ...listing,
+          userName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username : undefined
+        };
+      })
+    );
+    
+    return enhancedResults;
+  }
+
+  async getUserListings(userId: number): Promise<Listing[]> {
+    const result = await this.db.select()
+      .from(listings)
+      .where(eq(listings.userId, userId));
+    
+    const user = await this.getUser(userId);
+    const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username : undefined;
+    
+    return result.map(listing => ({
+      ...listing,
+      userName
+    }));
+  }
+
+  async createListing(userId: number, listing: Omit<Listing, "id" | "userId" | "createdAt">): Promise<Listing> {
+    const result = await this.db.insert(listings).values({
+      userId,
+      ...listing,
+      isFeatured: false,
+      rating: 4.5, // Default rating
+    }).returning();
+    
+    const user = await this.getUser(userId);
+    
+    return {
+      ...result[0],
+      userName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username : undefined
+    };
+  }
+
+  // Message methods
+  async getMessages(userId: number, otherUserId: number): Promise<Message[]> {
+    const result = await this.db.select()
+      .from(messages)
+      .where(
+        or(
+          and(
+            eq(messages.senderId, userId),
+            eq(messages.receiverId, otherUserId)
+          ),
+          and(
+            eq(messages.senderId, otherUserId),
+            eq(messages.receiverId, userId)
+          )
+        )
+      )
+      .orderBy(asc(messages.timestamp));
+    
+    // Mark messages as read
+    await this.db.update(messages)
+      .set({ read: true })
+      .where(
+        and(
+          eq(messages.senderId, otherUserId),
+          eq(messages.receiverId, userId),
+          eq(messages.read, false)
+        )
+      );
+    
+    // Enhance with sender names
+    const enhancedResults = await Promise.all(
+      result.map(async (message) => {
+        const sender = await this.getUser(message.senderId);
+        return {
+          ...message,
+          senderName: sender ? `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || sender.username : undefined
+        };
+      })
+    );
+    
+    return enhancedResults;
+  }
+
+  async getConversations(userId: number): Promise<Conversation[]> {
+    // Find all unique users this user has communicated with
+    const query = sql`
+      WITH conversation_partners AS (
+        SELECT DISTINCT
+          CASE 
+            WHEN sender_id = ${userId} THEN receiver_id
+            ELSE sender_id
+          END AS partner_id
+        FROM ${messages}
+        WHERE sender_id = ${userId} OR receiver_id = ${userId}
+      )
+      SELECT 
+        cp.partner_id as user_id,
+        u.first_name,
+        u.last_name,
+        u.username,
+        u.profile_image,
+        (
+          SELECT content 
+          FROM ${messages} m
+          WHERE (m.sender_id = ${userId} AND m.receiver_id = cp.partner_id)
+             OR (m.sender_id = cp.partner_id AND m.receiver_id = ${userId})
+          ORDER BY m.timestamp DESC
+          LIMIT 1
+        ) as last_message,
+        (
+          SELECT timestamp
+          FROM ${messages} m
+          WHERE (m.sender_id = ${userId} AND m.receiver_id = cp.partner_id)
+             OR (m.sender_id = cp.partner_id AND m.receiver_id = ${userId})
+          ORDER BY m.timestamp DESC
+          LIMIT 1
+        ) as last_message_time,
+        (
+          SELECT CASE
+                  WHEN m.sender_id = ${userId} THEN true
+                  ELSE m.read
+                END
+          FROM ${messages} m
+          WHERE (m.sender_id = ${userId} AND m.receiver_id = cp.partner_id)
+             OR (m.sender_id = cp.partner_id AND m.receiver_id = ${userId})
+          ORDER BY m.timestamp DESC
+          LIMIT 1
+        ) as read
+      FROM conversation_partners cp
+      JOIN ${users} u ON cp.partner_id = u.id
+      ORDER BY last_message_time DESC
+    `;
+    
+    const result = await this.db.execute(query);
+    
+    return result.map(row => ({
+      userId: Number(row.user_id),
+      name: `${row.first_name || ''} ${row.last_name || ''}`.trim() || row.username,
+      profileImage: row.profile_image,
+      lastMessage: row.last_message,
+      lastMessageTime: new Date(row.last_message_time),
+      read: Boolean(row.read)
+    })) as Conversation[];
+  }
+
+  async createMessage(message: Omit<Message, "id" | "timestamp">): Promise<Message> {
+    const result = await this.db.insert(messages).values({
+      ...message,
+    }).returning();
+    
+    const newMessage = result[0];
+    
+    // Also update or create conversation record 
+    const conversationKey = this.getConversationKey(message.senderId, message.receiverId);
+    const existingConversation = await this.db.select()
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.user1Id, Number(conversationKey.split('-')[0])),
+          eq(conversations.user2Id, Number(conversationKey.split('-')[1]))
+        )
+      )
+      .limit(1);
+    
+    if (existingConversation.length) {
+      await this.db.update(conversations)
+        .set({ 
+          lastMessageId: newMessage.id,
+          updatedAt: new Date()
+        })
+        .where(eq(conversations.id, existingConversation[0].id));
+    } else {
+      await this.db.insert(conversations).values({
+        user1Id: Number(conversationKey.split('-')[0]),
+        user2Id: Number(conversationKey.split('-')[1]),
+        lastMessageId: newMessage.id
+      });
+    }
+    
+    // Get sender info
+    const sender = await this.getUser(message.senderId);
+    
+    return {
+      ...newMessage,
+      senderName: sender ? `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || sender.username : undefined
+    };
+  }
+
+  private getConversationKey(user1Id: number, user2Id: number): string {
+    // Ensure consistent key regardless of order
+    return [user1Id, user2Id].sort().join('-');
+  }
+}
+
+// Initialize appropriate storage based on environment
+export const storage = process.env.DATABASE_URL 
+  ? new DatabaseStorage() 
+  : new MemStorage();
