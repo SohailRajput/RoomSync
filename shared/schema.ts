@@ -78,6 +78,14 @@ export const updateUserProfileSchema = z.object({
   duration: z.string().optional(),
   lookingFor: z.string().optional(),
   roommatePreferences: z.array(z.string()).optional(),
+  // Account settings fields
+  isProfilePublic: z.boolean().optional(),
+  currentPassword: z.string().optional(),
+  newPassword: z.string().optional(),
+  confirmPassword: z.string().optional(),
+  messageNotifications: z.boolean().optional(),
+  matchNotifications: z.boolean().optional(),
+  listingNotifications: z.boolean().optional(),
 });
 
 // Roommate Schema (extends user data)
