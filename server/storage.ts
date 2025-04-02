@@ -4,13 +4,16 @@ import {
   messages,
   roommates,
   conversations,
+  badges,
   type User, 
   type InsertUser, 
   type UpdateUserProfile, 
   type Roommate, 
   type Listing, 
   type Message, 
-  type Conversation 
+  type Conversation,
+  type Badge,
+  type UserBadge
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { eq, and, gte, lte, like, inArray, desc, sql, asc, isNotNull, or } from "drizzle-orm";
@@ -42,6 +45,13 @@ export interface IStorage {
   getMessages(userId: number, otherUserId: number): Promise<Message[]>;
   getConversations(userId: number): Promise<Conversation[]>;
   createMessage(message: Omit<Message, "id" | "timestamp">): Promise<Message>;
+  
+  // Badge methods
+  getAllBadges(): Promise<Badge[]>;
+  getBadgeById(id: number): Promise<Badge | undefined>;
+  getUserBadges(userId: number): Promise<UserBadge[]>;
+  awardBadge(userId: number, badgeId: number): Promise<UserBadge>;
+  calculateProfileCompletion(userId: number): Promise<number>;
 }
 
 // Filter interfaces
@@ -69,10 +79,12 @@ export class MemStorage implements IStorage {
   private listings: Map<number, Listing>;
   private messages: Map<number, Message>;
   private conversations: Map<string, { lastMessageId: number, updatedAt: Date }>;
+  private badges: Map<number, Badge>;
   
   private userId: number = 1;
   private listingId: number = 1;
   private messageId: number = 1;
+  private badgeId: number = 1;
   
   constructor() {
     this.users = new Map();
@@ -80,6 +92,7 @@ export class MemStorage implements IStorage {
     this.listings = new Map();
     this.messages = new Map();
     this.conversations = new Map();
+    this.badges = new Map();
     
     // Create some sample data for development
     this.seedData();
@@ -105,8 +118,18 @@ export class MemStorage implements IStorage {
       ...insertUser, 
       id,
       password: hashedPassword,
+      firstName: null,
+      lastName: null,
+      age: null,
+      gender: null,
+      occupation: null,
+      location: null,
+      bio: null,
       preferences: [],
+      profileImage: null,
       isVerified: false,
+      profileCompletion: 0,
+      userBadges: [],
       createdAt: new Date()
     };
     
@@ -397,6 +420,174 @@ export class MemStorage implements IStorage {
     return newMessage;
   }
   
+  // Badge methods
+  async getAllBadges(): Promise<Badge[]> {
+    return Array.from(this.badges.values());
+  }
+  
+  async getBadgeById(id: number): Promise<Badge | undefined> {
+    return this.badges.get(id);
+  }
+  
+  async getUserBadges(userId: number): Promise<UserBadge[]> {
+    const user = await this.getUser(userId);
+    if (!user || !user.userBadges) return [];
+    return user.userBadges;
+  }
+  
+  async awardBadge(userId: number, badgeId: number): Promise<UserBadge> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
+    const badge = await this.getBadgeById(badgeId);
+    if (!badge) {
+      throw new Error("Badge not found");
+    }
+    
+    // Create UserBadge
+    const userBadge: UserBadge = {
+      id: badge.id,
+      name: badge.name,
+      description: badge.description,
+      icon: badge.icon,
+      category: badge.category,
+      awardedAt: new Date()
+    };
+    
+    // Add badge to user
+    if (!user.userBadges) {
+      user.userBadges = [];
+    }
+    
+    // Check if user already has this badge
+    if (!user.userBadges.some(b => b.id === badgeId)) {
+      user.userBadges.push(userBadge);
+      this.users.set(user.id, user);
+    }
+    
+    return userBadge;
+  }
+  
+  async calculateProfileCompletion(userId: number): Promise<number> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
+    // Fields to check for profile completion
+    const fields = [
+      'firstName',
+      'lastName',
+      'age',
+      'gender',
+      'occupation',
+      'location',
+      'bio',
+      'profileImage'
+    ];
+    
+    let completedFields = 0;
+    fields.forEach(field => {
+      if (user[field as keyof User] !== null && user[field as keyof User] !== undefined) {
+        completedFields++;
+      }
+    });
+    
+    // Check preferences array
+    if (user.preferences && user.preferences.length > 0) {
+      completedFields++;
+    }
+    
+    // Calculate percentage (9 is the total number of fields including preferences)
+    const percentage = Math.round((completedFields / 9) * 100);
+    
+    // Update user profile completion
+    user.profileCompletion = percentage;
+    this.users.set(user.id, user);
+    
+    // Check if completion meets badge thresholds and award badges
+    this.checkProfileCompletionBadges(user.id, percentage);
+    
+    return percentage;
+  }
+  
+  // Helper method to award profile completion badges
+  private async checkProfileCompletionBadges(userId: number, completion: number): Promise<void> {
+    if (completion >= 25) {
+      // Find or create the "Profile Starter" badge
+      let starterBadge = Array.from(this.badges.values()).find(b => b.name === "Profile Starter");
+      if (!starterBadge) {
+        starterBadge = {
+          id: this.badgeId++,
+          name: "Profile Starter",
+          description: "Completed 25% of your profile",
+          icon: "🏅",
+          category: "profile",
+          criteria: "Complete 25% of your profile",
+          requiredPoints: 25
+        };
+        this.badges.set(starterBadge.id, starterBadge);
+      }
+      await this.awardBadge(userId, starterBadge.id);
+    }
+    
+    if (completion >= 50) {
+      // Find or create the "Halfway There" badge
+      let halfwayBadge = Array.from(this.badges.values()).find(b => b.name === "Halfway There");
+      if (!halfwayBadge) {
+        halfwayBadge = {
+          id: this.badgeId++,
+          name: "Halfway There",
+          description: "Completed 50% of your profile",
+          icon: "🥈",
+          category: "profile",
+          criteria: "Complete 50% of your profile",
+          requiredPoints: 50
+        };
+        this.badges.set(halfwayBadge.id, halfwayBadge);
+      }
+      await this.awardBadge(userId, halfwayBadge.id);
+    }
+    
+    if (completion >= 75) {
+      // Find or create the "Almost Complete" badge
+      let almostBadge = Array.from(this.badges.values()).find(b => b.name === "Almost Complete");
+      if (!almostBadge) {
+        almostBadge = {
+          id: this.badgeId++,
+          name: "Almost Complete",
+          description: "Completed 75% of your profile",
+          icon: "🥇",
+          category: "profile",
+          criteria: "Complete 75% of your profile",
+          requiredPoints: 75
+        };
+        this.badges.set(almostBadge.id, almostBadge);
+      }
+      await this.awardBadge(userId, almostBadge.id);
+    }
+    
+    if (completion === 100) {
+      // Find or create the "Profile Master" badge
+      let masterBadge = Array.from(this.badges.values()).find(b => b.name === "Profile Master");
+      if (!masterBadge) {
+        masterBadge = {
+          id: this.badgeId++,
+          name: "Profile Master",
+          description: "Completed 100% of your profile",
+          icon: "🏆",
+          category: "profile",
+          criteria: "Complete 100% of your profile",
+          requiredPoints: 100
+        };
+        this.badges.set(masterBadge.id, masterBadge);
+      }
+      await this.awardBadge(userId, masterBadge.id);
+    }
+  }
+  
   // Helper methods
   private hashPassword(password: string): string {
     // In a real app, use a proper password hashing library like bcrypt
@@ -427,6 +618,8 @@ export class MemStorage implements IStorage {
       preferences: ["Non-smoker", "Early bird", "Clean", "Pet-friendly"],
       profileImage: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
       isVerified: true,
+      profileCompletion: 100,
+      userBadges: [],
       createdAt: new Date()
     };
     
@@ -444,6 +637,8 @@ export class MemStorage implements IStorage {
       preferences: ["Non-smoker", "Night owl", "Organized", "Quiet"],
       profileImage: "https://images.unsplash.com/photo-1463453091185-61582044d556?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
       isVerified: true,
+      profileCompletion: 100,
+      userBadges: [],
       createdAt: new Date()
     };
     
@@ -461,6 +656,8 @@ export class MemStorage implements IStorage {
       preferences: ["Non-smoker", "Flexible schedule", "Creative", "Social"],
       profileImage: "https://images.unsplash.com/photo-1542206395-9feb3edaa68d?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
       isVerified: true,
+      profileCompletion: 100,
+      userBadges: [],
       createdAt: new Date()
     };
     

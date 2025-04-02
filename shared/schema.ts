@@ -2,6 +2,31 @@ import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Type for user badges (stored in jsonb column)
+export type UserBadge = {
+  id: number;
+  name: string;
+  description: string;
+  icon: string;
+  category: string;
+  awardedAt: Date;
+};
+
+// Badge Schema
+export const badges = pgTable("badges", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  icon: text("icon").notNull(),
+  criteria: text("criteria").notNull(),
+  category: text("category").notNull(), // profile, engagement, verification, etc.
+  requiredPoints: integer("required_points").notNull().default(1),
+});
+
+export const insertBadgeSchema = createInsertSchema(badges).omit({
+  id: true
+});
+
 // User Schema
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -17,7 +42,9 @@ export const users = pgTable("users", {
   preferences: text("preferences").array(),
   profileImage: text("profile_image"),
   isVerified: boolean("is_verified").default(false),
-  createdAt: timestamp("created_at").defaultNow()
+  createdAt: timestamp("created_at").defaultNow(),
+  profileCompletion: integer("profile_completion").default(0), // 0-100%
+  userBadges: jsonb("user_badges").$type<UserBadge[]>().default([]), // array of badges earned
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -35,6 +62,15 @@ export const updateUserProfileSchema = z.object({
   bio: z.string().optional(),
   preferences: z.array(z.string()).optional(),
   profileImage: z.string().optional(),
+  profileCompletion: z.number().min(0).max(100).optional(),
+  userBadges: z.array(z.object({
+    id: z.number(),
+    name: z.string(),
+    description: z.string(),
+    icon: z.string(),
+    category: z.string(),
+    awardedAt: z.date()
+  })).optional(),
 });
 
 // Roommate Schema (extends user data)
@@ -103,6 +139,8 @@ export const conversations = pgTable("conversations", {
 });
 
 // Type definitions
+export type Badge = typeof badges.$inferSelect;
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UpdateUserProfile = z.infer<typeof updateUserProfileSchema>;
