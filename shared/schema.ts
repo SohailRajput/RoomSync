@@ -71,6 +71,13 @@ export const updateUserProfileSchema = z.object({
     category: z.string(),
     awardedAt: z.date()
   })).optional(),
+  // Roommate preference fields
+  minBudget: z.number().optional(),
+  maxBudget: z.number().optional(),
+  moveInDate: z.string().optional(),
+  duration: z.string().optional(),
+  lookingFor: z.string().optional(),
+  roommatePreferences: z.array(z.string()).optional(),
 });
 
 // Roommate Schema (extends user data)

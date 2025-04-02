@@ -66,6 +66,12 @@ export default function Profile() {
       location: "",
       bio: "",
       preferences: [],
+      minBudget: undefined,
+      maxBudget: undefined,
+      moveInDate: "",
+      duration: "",
+      lookingFor: "room",
+      roommatePreferences: [],
     },
   });
   
@@ -81,6 +87,12 @@ export default function Profile() {
         location: profile.location || "",
         bio: profile.bio || "",
         preferences: profile.preferences || [],
+        minBudget: profile.minBudget || undefined,
+        maxBudget: profile.maxBudget || undefined,
+        moveInDate: profile.moveInDate || "",
+        duration: profile.duration || "",
+        lookingFor: profile.lookingFor || "room",
+        roommatePreferences: profile.roommatePreferences || [],
       });
       setSelectedPreferences(profile.preferences || []);
     }
@@ -378,32 +390,44 @@ export default function Profile() {
                           <div>
                             <FormLabel className="block mb-2">Budget Range</FormLabel>
                             <div className="flex items-center gap-2">
-                              <Input 
-                                type="number" 
-                                placeholder="Min $" 
-                                className="w-full"
-                                value={profile?.minBudget || ""}
-                                onChange={(e) => {
-                                  const value = e.target.value === "" ? undefined : Number(e.target.value);
-                                  // We'll update this in the full mutation
-                                  if (value) {
-                                    form.setValue("minBudget", value);
-                                  }
-                                }}
+                              <FormField
+                                control={form.control}
+                                name="minBudget"
+                                render={({ field }) => (
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      placeholder="Min $"
+                                      className="w-full"
+                                      {...field}
+                                      value={field.value || ""}
+                                      onChange={(e) => {
+                                        const value = e.target.value === "" ? undefined : Number(e.target.value);
+                                        field.onChange(value);
+                                      }}
+                                    />
+                                  </FormControl>
+                                )}
                               />
                               <span>to</span>
-                              <Input 
-                                type="number" 
-                                placeholder="Max $" 
-                                className="w-full"
-                                value={profile?.maxBudget || ""}
-                                onChange={(e) => {
-                                  const value = e.target.value === "" ? undefined : Number(e.target.value);
-                                  // We'll update this in the full mutation
-                                  if (value) {
-                                    form.setValue("maxBudget", value);
-                                  }
-                                }}
+                              <FormField
+                                control={form.control}
+                                name="maxBudget"
+                                render={({ field }) => (
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      placeholder="Max $"
+                                      className="w-full"
+                                      {...field}
+                                      value={field.value || ""}
+                                      onChange={(e) => {
+                                        const value = e.target.value === "" ? undefined : Number(e.target.value);
+                                        field.onChange(value);
+                                      }}
+                                    />
+                                  </FormControl>
+                                )}
                               />
                             </div>
                             <p className="text-xs text-neutral-500 mt-1">Your monthly budget for rent</p>
@@ -411,13 +435,18 @@ export default function Profile() {
                           
                           <div>
                             <FormLabel className="block mb-2">Move-in Date</FormLabel>
-                            <Input 
-                              type="date" 
-                              className="w-full"
-                              value={profile?.moveInDate || ""}
-                              onChange={(e) => {
-                                form.setValue("moveInDate", e.target.value);
-                              }}
+                            <FormField
+                              control={form.control}
+                              name="moveInDate"
+                              render={({ field }) => (
+                                <FormControl>
+                                  <Input
+                                    type="date"
+                                    className="w-full"
+                                    {...field}
+                                  />
+                                </FormControl>
+                              )}
                             />
                             <p className="text-xs text-neutral-500 mt-1">When you're planning to move</p>
                           </div>
@@ -426,71 +455,93 @@ export default function Profile() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div>
                             <FormLabel className="block mb-2">Duration</FormLabel>
-                            <Select 
-                              defaultValue={profile?.duration || ""}
-                              onValueChange={(value) => form.setValue("duration", value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select lease duration" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="short-term">Short term (1-3 months)</SelectItem>
-                                <SelectItem value="medium-term">Medium term (3-6 months)</SelectItem>
-                                <SelectItem value="long-term">Long term (6+ months)</SelectItem>
-                                <SelectItem value="flexible">Flexible</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            <FormField
+                              control={form.control}
+                              name="duration"
+                              render={({ field }) => (
+                                <FormControl>
+                                  <Select 
+                                    value={field.value || ""}
+                                    onValueChange={field.onChange}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select lease duration" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="short-term">Short term (1-3 months)</SelectItem>
+                                      <SelectItem value="medium-term">Medium term (3-6 months)</SelectItem>
+                                      <SelectItem value="long-term">Long term (6+ months)</SelectItem>
+                                      <SelectItem value="flexible">Flexible</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </FormControl>
+                              )}
+                            />
                             <p className="text-xs text-neutral-500 mt-1">Your preferred lease length</p>
                           </div>
                           
                           <div>
                             <FormLabel className="block mb-2">Looking For</FormLabel>
-                            <Select 
-                              defaultValue={profile?.lookingFor || "room"}
-                              onValueChange={(value) => form.setValue("lookingFor", value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="What are you looking for?" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="room">A room to rent</SelectItem>
-                                <SelectItem value="roommate">A roommate for my place</SelectItem>
-                                <SelectItem value="both">Both options</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            <FormField
+                              control={form.control}
+                              name="lookingFor"
+                              render={({ field }) => (
+                                <FormControl>
+                                  <Select 
+                                    value={field.value || "room"}
+                                    onValueChange={field.onChange}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="What are you looking for?" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="room">A room to rent</SelectItem>
+                                      <SelectItem value="roommate">A roommate for my place</SelectItem>
+                                      <SelectItem value="both">Both options</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </FormControl>
+                              )}
+                            />
                             <p className="text-xs text-neutral-500 mt-1">Are you looking for a room or a roommate?</p>
                           </div>
                         </div>
                         
-                        <div>
-                          <FormLabel className="block mb-2">Preferred Roommate Traits</FormLabel>
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
-                            {lifestylePreferences.map((preference) => (
-                              <div key={preference} className="flex items-center space-x-2">
-                                <Checkbox
-                                  id={`roommate-${preference}`}
-                                  checked={(profile?.roommatePreferences || []).includes(preference)}
-                                  onCheckedChange={(checked) => {
-                                    const current = profile?.roommatePreferences || [];
-                                    const updated = checked 
-                                      ? [...current, preference]
-                                      : current.filter(p => p !== preference);
-                                    form.setValue("roommatePreferences", updated);
-                                  }}
-                                />
-                                <label
-                                  htmlFor={`roommate-${preference}`}
-                                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                                >
-                                  {preference}
-                                </label>
+                        <FormField
+                          control={form.control}
+                          name="roommatePreferences"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Preferred Roommate Traits</FormLabel>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
+                                {lifestylePreferences.map((preference) => (
+                                  <div key={preference} className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`roommate-${preference}`}
+                                      checked={(field.value || []).includes(preference)}
+                                      onCheckedChange={(checked) => {
+                                        const currentValues = field.value || [];
+                                        const newValues = checked
+                                          ? [...currentValues, preference]
+                                          : currentValues.filter((val) => val !== preference);
+                                        field.onChange(newValues);
+                                      }}
+                                    />
+                                    <label
+                                      htmlFor={`roommate-${preference}`}
+                                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                    >
+                                      {preference}
+                                    </label>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                          </div>
-                          <p className="text-xs text-neutral-500 mt-2">
-                            Select the traits you'd prefer in a roommate
-                          </p>
-                        </div>
+                              <FormDescription>
+                                Select the traits you'd prefer in a roommate
+                              </FormDescription>
+                            </FormItem>
+                          )}
+                        />
                         
                         <Button 
                           type="submit" 
