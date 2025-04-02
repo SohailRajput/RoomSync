@@ -121,56 +121,57 @@ export default function Profile() {
   });
   
   const onPersonalInfoSubmit = (data: z.infer<typeof updateUserProfileSchema>) => {
-    // Preserve existing preferences if they exist
+    // Make a copy of the original profile data
     const updatedData = {
-      ...data,
-      preferences: selectedPreferences,
-      // Preserve other fields from different tabs
-      minBudget: profile?.minBudget,
-      maxBudget: profile?.maxBudget,
-      moveInDate: profile?.moveInDate,
-      duration: profile?.duration,
-      lookingFor: profile?.lookingFor,
-      roommatePreferences: profile?.roommatePreferences,
+      ...(profile || {}),
+      // Update with the personal info from the form
+      firstName: data.firstName,
+      lastName: data.lastName,
+      age: data.age,
+      gender: data.gender,
+      occupation: data.occupation,
+      location: data.location,
+      bio: data.bio,
+      preferences: selectedPreferences, // Use the preferences from the state
     };
+    
+    console.log("Submitting personal info with preferences:", selectedPreferences);
     updateProfileMutation.mutate(updatedData);
   };
   
   const onPreferencesSubmit = (data: z.infer<typeof updateUserProfileSchema>) => {
-    // Preserve personal info if it exists
+    // Make a copy of the original profile data
     const updatedData = {
-      ...data,
-      firstName: profile?.firstName,
-      lastName: profile?.lastName,
-      age: profile?.age,
-      gender: profile?.gender,
-      occupation: profile?.occupation,
-      location: profile?.location,
-      bio: profile?.bio,
-      preferences: profile?.preferences,
+      ...(profile || {}),
+      // Update with the preferences from the form
+      minBudget: data.minBudget,
+      maxBudget: data.maxBudget, 
+      moveInDate: data.moveInDate,
+      duration: data.duration,
+      lookingFor: data.lookingFor,
+      roommatePreferences: data.roommatePreferences,
     };
+    
+    console.log("Submitting roommate preferences form data:", {
+      minBudget: data.minBudget,
+      maxBudget: data.maxBudget,
+      moveInDate: data.moveInDate,
+      duration: data.duration,
+      lookingFor: data.lookingFor,
+      roommatePreferences: data.roommatePreferences,
+    });
+    
     updateProfileMutation.mutate(updatedData);
   };
   
   const onAccountSettingsSubmit = (data: z.infer<typeof updateUserProfileSchema>) => {
-    // Preserve other info if it exists
+    // Make a copy of the original profile data
     const updatedData = {
-      ...data,
-      firstName: profile?.firstName,
-      lastName: profile?.lastName,
-      age: profile?.age,
-      gender: profile?.gender,
-      occupation: profile?.occupation,
-      location: profile?.location,
-      bio: profile?.bio,
-      preferences: profile?.preferences,
-      minBudget: profile?.minBudget,
-      maxBudget: profile?.maxBudget,
-      moveInDate: profile?.moveInDate,
-      duration: profile?.duration,
-      lookingFor: profile?.lookingFor,
-      roommatePreferences: profile?.roommatePreferences,
+      ...(profile || {}),
+      // Account settings data would be added here
+      // Currently no fields to update from the form
     };
+    
     updateProfileMutation.mutate(updatedData);
   };
   
