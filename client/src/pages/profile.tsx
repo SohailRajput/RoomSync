@@ -361,13 +361,147 @@ export default function Profile() {
                 <CardHeader>
                   <CardTitle>Roommate Preferences</CardTitle>
                   <CardDescription>
-                    Tell us what you're looking for in a roommate.
+                    Tell us what you're looking for in a roommate and your living situation.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-neutral-500 mb-4">
-                    This section is under development. Soon you'll be able to set your roommate preferences here.
-                  </p>
+                  {isLoading ? (
+                    <div className="space-y-4">
+                      <div className="h-10 bg-neutral-100 animate-pulse rounded"></div>
+                      <div className="h-10 bg-neutral-100 animate-pulse rounded"></div>
+                      <div className="h-10 bg-neutral-100 animate-pulse rounded"></div>
+                    </div>
+                  ) : (
+                    <Form {...form}>
+                      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                            <FormLabel className="block mb-2">Budget Range</FormLabel>
+                            <div className="flex items-center gap-2">
+                              <Input 
+                                type="number" 
+                                placeholder="Min $" 
+                                className="w-full"
+                                value={profile?.minBudget || ""}
+                                onChange={(e) => {
+                                  const value = e.target.value === "" ? undefined : Number(e.target.value);
+                                  // We'll update this in the full mutation
+                                  if (value) {
+                                    form.setValue("minBudget", value);
+                                  }
+                                }}
+                              />
+                              <span>to</span>
+                              <Input 
+                                type="number" 
+                                placeholder="Max $" 
+                                className="w-full"
+                                value={profile?.maxBudget || ""}
+                                onChange={(e) => {
+                                  const value = e.target.value === "" ? undefined : Number(e.target.value);
+                                  // We'll update this in the full mutation
+                                  if (value) {
+                                    form.setValue("maxBudget", value);
+                                  }
+                                }}
+                              />
+                            </div>
+                            <p className="text-xs text-neutral-500 mt-1">Your monthly budget for rent</p>
+                          </div>
+                          
+                          <div>
+                            <FormLabel className="block mb-2">Move-in Date</FormLabel>
+                            <Input 
+                              type="date" 
+                              className="w-full"
+                              value={profile?.moveInDate || ""}
+                              onChange={(e) => {
+                                form.setValue("moveInDate", e.target.value);
+                              }}
+                            />
+                            <p className="text-xs text-neutral-500 mt-1">When you're planning to move</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                            <FormLabel className="block mb-2">Duration</FormLabel>
+                            <Select 
+                              defaultValue={profile?.duration || ""}
+                              onValueChange={(value) => form.setValue("duration", value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select lease duration" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="short-term">Short term (1-3 months)</SelectItem>
+                                <SelectItem value="medium-term">Medium term (3-6 months)</SelectItem>
+                                <SelectItem value="long-term">Long term (6+ months)</SelectItem>
+                                <SelectItem value="flexible">Flexible</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-neutral-500 mt-1">Your preferred lease length</p>
+                          </div>
+                          
+                          <div>
+                            <FormLabel className="block mb-2">Looking For</FormLabel>
+                            <Select 
+                              defaultValue={profile?.lookingFor || "room"}
+                              onValueChange={(value) => form.setValue("lookingFor", value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="What are you looking for?" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="room">A room to rent</SelectItem>
+                                <SelectItem value="roommate">A roommate for my place</SelectItem>
+                                <SelectItem value="both">Both options</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-neutral-500 mt-1">Are you looking for a room or a roommate?</p>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <FormLabel className="block mb-2">Preferred Roommate Traits</FormLabel>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
+                            {lifestylePreferences.map((preference) => (
+                              <div key={preference} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`roommate-${preference}`}
+                                  checked={(profile?.roommatePreferences || []).includes(preference)}
+                                  onCheckedChange={(checked) => {
+                                    const current = profile?.roommatePreferences || [];
+                                    const updated = checked 
+                                      ? [...current, preference]
+                                      : current.filter(p => p !== preference);
+                                    form.setValue("roommatePreferences", updated);
+                                  }}
+                                />
+                                <label
+                                  htmlFor={`roommate-${preference}`}
+                                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
+                                  {preference}
+                                </label>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-xs text-neutral-500 mt-2">
+                            Select the traits you'd prefer in a roommate
+                          </p>
+                        </div>
+                        
+                        <Button 
+                          type="submit" 
+                          className="w-full md:w-auto"
+                          disabled={updateProfileMutation.isPending}
+                        >
+                          {updateProfileMutation.isPending ? "Saving..." : "Save Preferences"}
+                        </Button>
+                      </form>
+                    </Form>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>

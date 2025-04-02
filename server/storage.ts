@@ -969,11 +969,13 @@ export class DatabaseStorage implements IStorage {
 
   // Listing methods
   async getListings(filters?: ListingFilters): Promise<Listing[]> {
-    let query = this.db.select().from(listings);
+    // Start with publicly visible listings by default (don't show private listings)
+    let query = this.db.select().from(listings)
+      .where(eq(listings.isPublic, true));
     
     // Apply filters
     if (filters) {
-      const conditions = [];
+      const conditions = [eq(listings.isPublic, true)]; // Always keep the public filter
       
       if (filters.location) {
         conditions.push(like(listings.location, `%${filters.location}%`));
@@ -996,9 +998,8 @@ export class DatabaseStorage implements IStorage {
         conditions.push(lte(listings.availableFrom, today));
       }
       
-      if (conditions.length > 0) {
-        query = query.where(and(...conditions));
-      }
+      // Replace the query with all conditions
+      query = this.db.select().from(listings).where(and(...conditions));
     }
     
     const results = await query;

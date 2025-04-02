@@ -102,6 +102,7 @@ export const listings = pgTable("listings", {
   amenities: text("amenities").array(),
   images: text("images").array(),
   isFeatured: boolean("is_featured").default(false),
+  isPublic: boolean("is_public").default(true),
   rating: integer("rating").default(0),
   createdAt: timestamp("created_at").defaultNow()
 });
