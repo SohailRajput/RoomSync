@@ -35,7 +35,7 @@ export default function Messages() {
     isLoading: messagesLoading,
     error: messagesError
   } = useQuery<Message[]>({
-    queryKey: ["/api/messages/conversation", selectedConversation],
+    queryKey: [`/api/messages/conversation/${selectedConversation}`],
     enabled: selectedConversation !== null,
     refetchInterval: 3000, // Poll for new messages every 3 seconds
   });
@@ -53,7 +53,7 @@ export default function Messages() {
       // Refetch both messages and conversations
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: ["/api/messages/conversation", selectedConversation]
+          queryKey: [`/api/messages/conversation/${selectedConversation}`]
         }),
         queryClient.invalidateQueries({
           queryKey: ["/api/messages/conversations"]
@@ -194,7 +194,7 @@ export default function Messages() {
                             className="mt-2"
                             onClick={() => {
                               queryClient.invalidateQueries({
-                                queryKey: ["/api/messages/conversation", selectedConversation]
+                                queryKey: [`/api/messages/conversation/${selectedConversation}`]
                               });
                             }}
                           >
