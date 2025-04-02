@@ -818,7 +818,9 @@ export class DatabaseStorage implements IStorage {
       username: insertUser.username,
       password: hashedPassword,
       preferences: [],
-      isVerified: false
+      isVerified: false,
+      profileCompletion: 0,
+      userBadges: []
     }).returning();
     
     return result[0];
@@ -1273,6 +1275,172 @@ export class DatabaseStorage implements IStorage {
   private getConversationKey(user1Id: number, user2Id: number): string {
     // Ensure consistent key regardless of order
     return [user1Id, user2Id].sort().join('-');
+  }
+
+  // Badge methods
+  async getAllBadges(): Promise<Badge[]> {
+    const result = await this.db.select().from(badges);
+    return result;
+  }
+
+  async getBadgeById(id: number): Promise<Badge | undefined> {
+    const result = await this.db.select().from(badges).where(eq(badges.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getUserBadges(userId: number): Promise<UserBadge[]> {
+    const user = await this.getUser(userId);
+    return user?.userBadges || [];
+  }
+
+  async awardBadge(userId: number, badgeId: number): Promise<UserBadge> {
+    // Get the badge details
+    const badge = await this.getBadgeById(badgeId);
+    if (!badge) {
+      throw new Error(`Badge with ID ${badgeId} not found`);
+    }
+
+    // Get the user
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error(`User with ID ${userId} not found`);
+    }
+
+    // Check if the user already has this badge
+    const existingBadges = user.userBadges || [];
+    if (existingBadges.some(b => b.id === badgeId)) {
+      // User already has this badge, return it
+      return existingBadges.find(b => b.id === badgeId)!;
+    }
+
+    // Create a new badge entry for the user
+    const userBadge: UserBadge = {
+      id: badge.id,
+      name: badge.name,
+      description: badge.description,
+      icon: badge.icon,
+      category: badge.category,
+      awardedAt: new Date()
+    };
+
+    // Add the badge to the user's badges and update the user
+    const updatedBadges = [...existingBadges, userBadge];
+    await this.db.update(users)
+      .set({ userBadges: updatedBadges })
+      .where(eq(users.id, userId));
+
+    return userBadge;
+  }
+
+  async calculateProfileCompletion(userId: number): Promise<number> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error(`User with ID ${userId} not found`);
+    }
+
+    // Define fields that contribute to profile completeness
+    const fields = [
+      !!user.firstName,
+      !!user.lastName,
+      !!user.age,
+      !!user.gender,
+      !!user.occupation,
+      !!user.location,
+      !!user.bio,
+      !!(user.preferences && user.preferences.length > 0),
+      !!user.profileImage,
+    ];
+
+    // Calculate percentage based on filled fields
+    const filledFields = fields.filter(Boolean).length;
+    const totalFields = fields.length;
+    const completion = Math.round((filledFields / totalFields) * 100);
+
+    // Update user's profile completion if it has changed
+    if (user.profileCompletion !== completion) {
+      await this.db.update(users)
+        .set({ profileCompletion: completion })
+        .where(eq(users.id, userId));
+
+      // Check if we need to award new badges
+      await this.checkProfileCompletionBadges(userId, completion);
+    }
+
+    return completion;
+  }
+
+  private async checkProfileCompletionBadges(userId: number, completion: number): Promise<void> {
+    if (completion >= 25) {
+      // Find or create the "Profile Starter" badge
+      let starterBadge = (await this.getAllBadges()).find(b => b.name === "Profile Starter");
+      if (!starterBadge) {
+        // Create the badge in the database
+        const [newBadge] = await this.db.insert(badges).values({
+          name: "Profile Starter",
+          description: "Completed 25% of your profile",
+          icon: "🏅",
+          category: "profile",
+          criteria: "Complete 25% of your profile",
+          requiredPoints: 25
+        }).returning();
+        starterBadge = newBadge;
+      }
+      await this.awardBadge(userId, starterBadge.id);
+    }
+
+    if (completion >= 50) {
+      // Find or create the "Halfway There" badge
+      let halfwayBadge = (await this.getAllBadges()).find(b => b.name === "Halfway There");
+      if (!halfwayBadge) {
+        // Create the badge in the database
+        const [newBadge] = await this.db.insert(badges).values({
+          name: "Halfway There",
+          description: "Completed 50% of your profile",
+          icon: "🥈",
+          category: "profile",
+          criteria: "Complete 50% of your profile",
+          requiredPoints: 50
+        }).returning();
+        halfwayBadge = newBadge;
+      }
+      await this.awardBadge(userId, halfwayBadge.id);
+    }
+
+    if (completion >= 75) {
+      // Find or create the "Almost Complete" badge
+      let almostBadge = (await this.getAllBadges()).find(b => b.name === "Almost Complete");
+      if (!almostBadge) {
+        // Create the badge in the database
+        const [newBadge] = await this.db.insert(badges).values({
+          name: "Almost Complete",
+          description: "Completed 75% of your profile",
+          icon: "🥇",
+          category: "profile",
+          criteria: "Complete 75% of your profile",
+          requiredPoints: 75
+        }).returning();
+        almostBadge = newBadge;
+      }
+      await this.awardBadge(userId, almostBadge.id);
+    }
+
+    if (completion === 100) {
+      // Find or create the "Profile Master" badge
+      let masterBadge = (await this.getAllBadges()).find(b => b.name === "Profile Master");
+      if (!masterBadge) {
+        // Create the badge in the database
+        const [newBadge] = await this.db.insert(badges).values({
+          name: "Profile Master",
+          description: "Completed 100% of your profile",
+          icon: "🏆",
+          category: "profile",
+          criteria: "Complete 100% of your profile",
+          requiredPoints: 100
+        }).returning();
+        masterBadge = newBadge;
+      }
+      await this.awardBadge(userId, masterBadge.id);
+    }
   }
 }
 
