@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { AlertTriangle, Trash2 } from "lucide-react";
 import Navbar from "@/components/layout/navbar";
 import Footer from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Form,
   FormControl,
@@ -118,9 +120,58 @@ export default function Profile() {
     },
   });
   
-  const onSubmit = (data: z.infer<typeof updateUserProfileSchema>) => {
-    data.preferences = selectedPreferences;
-    updateProfileMutation.mutate(data);
+  const onPersonalInfoSubmit = (data: z.infer<typeof updateUserProfileSchema>) => {
+    // Preserve existing preferences if they exist
+    const updatedData = {
+      ...data,
+      preferences: selectedPreferences,
+      // Preserve other fields from different tabs
+      minBudget: profile?.minBudget,
+      maxBudget: profile?.maxBudget,
+      moveInDate: profile?.moveInDate,
+      duration: profile?.duration,
+      lookingFor: profile?.lookingFor,
+      roommatePreferences: profile?.roommatePreferences,
+    };
+    updateProfileMutation.mutate(updatedData);
+  };
+  
+  const onPreferencesSubmit = (data: z.infer<typeof updateUserProfileSchema>) => {
+    // Preserve personal info if it exists
+    const updatedData = {
+      ...data,
+      firstName: profile?.firstName,
+      lastName: profile?.lastName,
+      age: profile?.age,
+      gender: profile?.gender,
+      occupation: profile?.occupation,
+      location: profile?.location,
+      bio: profile?.bio,
+      preferences: profile?.preferences,
+    };
+    updateProfileMutation.mutate(updatedData);
+  };
+  
+  const onAccountSettingsSubmit = (data: z.infer<typeof updateUserProfileSchema>) => {
+    // Preserve other info if it exists
+    const updatedData = {
+      ...data,
+      firstName: profile?.firstName,
+      lastName: profile?.lastName,
+      age: profile?.age,
+      gender: profile?.gender,
+      occupation: profile?.occupation,
+      location: profile?.location,
+      bio: profile?.bio,
+      preferences: profile?.preferences,
+      minBudget: profile?.minBudget,
+      maxBudget: profile?.maxBudget,
+      moveInDate: profile?.moveInDate,
+      duration: profile?.duration,
+      lookingFor: profile?.lookingFor,
+      roommatePreferences: profile?.roommatePreferences,
+    };
+    updateProfileMutation.mutate(updatedData);
   };
   
   const togglePreference = (preference: string) => {
@@ -188,7 +239,7 @@ export default function Profile() {
                     </div>
                   ) : (
                     <Form {...form}>
-                      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                      <form onSubmit={form.handleSubmit(onPersonalInfoSubmit)} className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <FormField
                             control={form.control}
@@ -385,7 +436,7 @@ export default function Profile() {
                     </div>
                   ) : (
                     <Form {...form}>
-                      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                      <form onSubmit={form.handleSubmit(onPreferencesSubmit)} className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div>
                             <FormLabel className="block mb-2">Budget Range</FormLabel>
@@ -566,9 +617,130 @@ export default function Profile() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-neutral-500 mb-4">
-                    This section is under development. Soon you'll be able to update your account settings here.
-                  </p>
+                  {isLoading ? (
+                    <div className="space-y-4">
+                      <div className="h-10 bg-neutral-100 animate-pulse rounded"></div>
+                      <div className="h-10 bg-neutral-100 animate-pulse rounded"></div>
+                    </div>
+                  ) : (
+                    <Form {...form}>
+                      <form onSubmit={form.handleSubmit(onAccountSettingsSubmit)} className="space-y-6">
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                              <h3 className="text-lg font-medium mb-2">Profile Verification</h3>
+                              <div className="rounded-lg border p-4 bg-neutral-50">
+                                <div className="flex items-center mb-2">
+                                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 mr-2">
+                                    Verified
+                                  </Badge>
+                                  <p className="text-sm">Your email is verified</p>
+                                </div>
+                                <p className="text-xs text-neutral-500">
+                                  Verified accounts receive more responses and are more likely to be contacted by potential roommates.
+                                </p>
+                              </div>
+                            </div>
+
+                            <div>
+                              <h3 className="text-lg font-medium mb-2">Profile Visibility</h3>
+                              <div className="rounded-lg border p-4 bg-neutral-50">
+                                <div className="flex items-center mb-2">
+                                  <Switch 
+                                    id="profile-visibility"
+                                    checked={true}
+                                    // We'll implement this functionality later
+                                    // onCheckedChange={(checked) => {}}
+                                  />
+                                  <label htmlFor="profile-visibility" className="ml-2 text-sm">
+                                    Public profile
+                                  </label>
+                                </div>
+                                <p className="text-xs text-neutral-500">
+                                  When enabled, your profile is visible to other users on the platform.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <h3 className="text-lg font-medium mb-2">Password</h3>
+                            <div className="rounded-lg border p-4 bg-neutral-50 space-y-4">
+                              <div>
+                                <FormLabel htmlFor="current-password">Current Password</FormLabel>
+                                <Input id="current-password" type="password" className="mt-1" />
+                              </div>
+                              <div>
+                                <FormLabel htmlFor="new-password">New Password</FormLabel>
+                                <Input id="new-password" type="password" className="mt-1" />
+                              </div>
+                              <div>
+                                <FormLabel htmlFor="confirm-password">Confirm New Password</FormLabel>
+                                <Input id="confirm-password" type="password" className="mt-1" />
+                              </div>
+                              <p className="text-xs text-neutral-500">
+                                Password must be at least 8 characters long and include a mix of letters, numbers, and special characters.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div>
+                            <h3 className="text-lg font-medium mb-2">Notification Settings</h3>
+                            <div className="rounded-lg border p-4 bg-neutral-50 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm font-medium">New Message Notifications</p>
+                                  <p className="text-xs text-neutral-500">Get notified when you receive a new message</p>
+                                </div>
+                                <Switch id="new-message-notifications" checked={true} />
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm font-medium">New Match Notifications</p>
+                                  <p className="text-xs text-neutral-500">Get notified when you have a new compatible roommate match</p>
+                                </div>
+                                <Switch id="new-match-notifications" checked={true} />
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm font-medium">New Listing Notifications</p>
+                                  <p className="text-xs text-neutral-500">Get notified when new listings match your preferences</p>
+                                </div>
+                                <Switch id="new-listing-notifications" checked={true} />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <h3 className="text-lg font-medium mb-2">Account Actions</h3>
+                            <div className="rounded-lg border p-4 bg-neutral-50 space-y-3">
+                              <p className="text-sm text-neutral-600">
+                                These actions affect your entire account and cannot be undone.
+                              </p>
+                              <div className="flex flex-col space-y-2">
+                                <Button variant="outline" className="justify-start text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200">
+                                  <AlertTriangle className="mr-2 h-4 w-4" />
+                                  Deactivate Account Temporarily
+                                </Button>
+                                <Button variant="outline" className="justify-start text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200">
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete Account Permanently
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <Button 
+                          type="submit" 
+                          className="w-full md:w-auto"
+                          disabled={updateProfileMutation.isPending}
+                        >
+                          {updateProfileMutation.isPending ? "Saving..." : "Save Account Settings"}
+                        </Button>
+                      </form>
+                    </Form>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
