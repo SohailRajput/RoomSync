@@ -54,7 +54,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const validationError = fromZodError(error);
         res.status(400).json({ message: validationError.message });
       } else {
-        res.status(500).json({ message: 'An error occurred during registration' });
+        console.error('Registration error:', error);
+        res.status(500).json({ 
+          message: 'An error occurred during registration', 
+          error: error instanceof Error ? error.message : String(error)
+        });
       }
     }
   });
@@ -84,7 +88,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.status(200).json(userWithoutPassword);
     } catch (error) {
-      res.status(500).json({ message: 'An error occurred during login' });
+      console.error('Login error:', error);
+      res.status(500).json({ 
+        message: 'An error occurred during login', 
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
   
