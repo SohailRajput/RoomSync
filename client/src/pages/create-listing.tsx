@@ -77,6 +77,7 @@ export default function CreateListing() {
       availableFrom: "",
       amenities: [],
       images: [],
+      isPublic: true,
     },
   });
   
@@ -375,6 +376,30 @@ export default function CreateListing() {
                         <FormDescription className="mt-2">
                           Listings with photos get 2x more interest. Image upload functionality will be available soon. For now, placeholder images will be used.
                         </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="isPublic"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value === true}
+                            onCheckedChange={(checked) => field.onChange(checked === true)}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>
+                            Make this listing public
+                          </FormLabel>
+                          <FormDescription>
+                            If checked, your listing will be visible to all users. Uncheck to keep it private (only visible to you).
+                          </FormDescription>
+                        </div>
                         <FormMessage />
                       </FormItem>
                     )}

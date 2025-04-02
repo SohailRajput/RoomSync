@@ -35,8 +35,8 @@ export interface IStorage {
   getTopMatches(userId: number): Promise<Roommate[]>;
   
   // Listing methods
-  getListings(filters?: ListingFilters): Promise<Listing[]>;
-  getListingById(id: number): Promise<Listing | undefined>;
+  getListings(filters?: ListingFilters, currentUserId?: number): Promise<Listing[]>;
+  getListingById(id: number, currentUserId?: number): Promise<Listing | undefined>;
   getFeaturedListings(): Promise<Listing[]>;
   getUserListings(userId: number): Promise<Listing[]>;
   createListing(userId: number, listing: Omit<Listing, "id" | "userId" | "createdAt">): Promise<Listing>;
@@ -275,8 +275,13 @@ export class MemStorage implements IStorage {
   }
   
   // Listing methods
-  async getListings(filters?: ListingFilters): Promise<Listing[]> {
+  async getListings(filters?: ListingFilters, currentUserId?: number): Promise<Listing[]> {
     let listings = Array.from(this.listings.values());
+
+    // Filter for public listings or listings owned by current user
+    listings = listings.filter(l => 
+      l.isPublic === true || (currentUserId !== undefined && l.userId === currentUserId)
+    );
     
     // Apply filters
     if (filters) {
@@ -313,13 +318,26 @@ export class MemStorage implements IStorage {
     return listings;
   }
   
-  async getListingById(id: number): Promise<Listing | undefined> {
-    return this.listings.get(id);
+  async getListingById(id: number, currentUserId?: number): Promise<Listing | undefined> {
+    const listing = this.listings.get(id);
+    
+    // If no listing found, return undefined
+    if (!listing) {
+      return undefined;
+    }
+    
+    // Check if listing is public or belongs to the current user
+    if (listing.isPublic || (currentUserId !== undefined && listing.userId === currentUserId)) {
+      return listing;
+    }
+    
+    // Otherwise, don't return the private listing
+    return undefined;
   }
   
   async getFeaturedListings(): Promise<Listing[]> {
     return Array.from(this.listings.values())
-      .filter(listing => listing.isFeatured)
+      .filter(listing => listing.isFeatured && listing.isPublic)
       .slice(0, 3); // Return top 3 featured listings
   }
   
@@ -704,6 +722,7 @@ export class MemStorage implements IStorage {
       amenities: ["Furnished", "Utilities Included", "WiFi"],
       images: ["https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"],
       isFeatured: true,
+      isPublic: true,
       rating: 48, // Represents 4.8 as integer
       createdAt: new Date()
     };
@@ -721,6 +740,7 @@ export class MemStorage implements IStorage {
       amenities: ["Partially Furnished", "Laundry", "Balcony"],
       images: ["https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"],
       isFeatured: true,
+      isPublic: true,
       rating: 46, // Represents 4.6 as integer
       createdAt: new Date()
     };
@@ -738,6 +758,7 @@ export class MemStorage implements IStorage {
       amenities: ["Furnished", "Garden Access", "Pets Allowed"],
       images: ["https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80"],
       isFeatured: true,
+      isPublic: true,
       rating: 49, // Represents 4.9 as integer
       createdAt: new Date()
     };
@@ -968,15 +989,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Listing methods
-  async getListings(filters?: ListingFilters): Promise<Listing[]> {
-    // Start with publicly visible listings by default (don't show private listings)
-    let query = this.db.select().from(listings)
-      .where(eq(listings.isPublic, true));
+  async getListings(filters?: ListingFilters, currentUserId?: number): Promise<Listing[]> {
+    // Build array of conditions
+    const conditions = [];
+    
+    // Base condition - public listings or user's own listings
+    conditions.push(
+      or(
+        eq(listings.isPublic, true),
+        currentUserId ? eq(listings.userId, currentUserId) : undefined
+      )
+    );
     
     // Apply filters
     if (filters) {
-      const conditions = [eq(listings.isPublic, true)]; // Always keep the public filter
-      
       if (filters.location) {
         conditions.push(like(listings.location, `%${filters.location}%`));
       }
@@ -997,12 +1023,12 @@ export class DatabaseStorage implements IStorage {
         const today = new Date().toISOString().split('T')[0];
         conditions.push(lte(listings.availableFrom, today));
       }
-      
-      // Replace the query with all conditions
-      query = this.db.select().from(listings).where(and(...conditions));
     }
     
-    const results = await query;
+    // Execute query with all conditions combined with AND
+    const results = await this.db.select()
+      .from(listings)
+      .where(and(...conditions.filter(Boolean)));
     
     // Post-process for amenities if needed
     let filteredResults = results;
@@ -1028,11 +1054,17 @@ export class DatabaseStorage implements IStorage {
     return enhancedResults;
   }
 
-  async getListingById(id: number): Promise<Listing | undefined> {
+  async getListingById(id: number, currentUserId?: number): Promise<Listing | undefined> {
     const result = await this.db.select().from(listings).where(eq(listings.id, id)).limit(1);
     if (!result.length) return undefined;
     
     const listing = result[0];
+    
+    // Check if listing is public or belongs to the current user
+    if (!listing.isPublic && (!currentUserId || listing.userId !== currentUserId)) {
+      return undefined; // Return undefined for private listings not owned by current user
+    }
+    
     const user = await this.getUser(listing.userId);
     
     return {
@@ -1044,7 +1076,10 @@ export class DatabaseStorage implements IStorage {
   async getFeaturedListings(): Promise<Listing[]> {
     const result = await this.db.select()
       .from(listings)
-      .where(eq(listings.isFeatured, true))
+      .where(and(
+        eq(listings.isFeatured, true),
+        eq(listings.isPublic, true) // Only show public featured listings
+      ))
       .limit(3);
     
     // Enhance with username info

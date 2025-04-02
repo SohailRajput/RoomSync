@@ -288,7 +288,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         availableNow: req.query.availableNow === 'true'
       };
       
-      const listings = await storage.getListings(filters);
+      // Pass the current user ID if available
+      const currentUserId = req.session.userId ? req.session.userId : undefined;
+      const listings = await storage.getListings(filters, currentUserId);
       res.status(200).json(listings);
     } catch (error) {
       res.status(500).json({ message: 'An error occurred' });
@@ -320,13 +322,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Invalid listing ID' });
       }
       
-      const listing = await storage.getListingById(id);
+      // Pass the current user ID to getListingById, which will handle the visibility logic
+      const currentUserId = req.session.userId;
+      const listing = await storage.getListingById(id, currentUserId);
+      
+      // If no listing found or user doesn't have access (handled by storage layer)
       if (!listing) {
         return res.status(404).json({ message: 'Listing not found' });
       }
       
       res.status(200).json(listing);
     } catch (error) {
+      console.error('Error fetching listing:', error);
       res.status(500).json({ message: 'An error occurred' });
     }
   });
@@ -344,7 +351,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         roommates: data.roommates ?? 0,
         // Set default fields
         isFeatured: false,
-        rating: 0
+        rating: 0,
+        // Set isPublic flag, default to true if not provided
+        isPublic: data.isPublic ?? true
       };
       const listing = await storage.createListing(req.session.userId!, listingData);
       res.status(201).json(listing);
